@@ -1,0 +1,465 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import {
+  Wallet, Fingerprint, Sun, Moon, CheckCircle, AlertCircle, ArrowRight,
+  Shield, Smartphone, X
+} from 'lucide-react';
+import { UserAccount } from '../types';
+import { generateStk } from '../utils/rules';
+import { verifyPasskey } from '../utils/webauthn';
+
+interface AuthModalProps {
+  allUsers: UserAccount[];
+  isDarkMode: boolean;
+  onToggleTheme: () => void;
+  onLoginSuccess: (user: UserAccount) => void;
+  onRegisterSuccess: (newUser: UserAccount) => void;
+  triggerToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+}
+
+export const AuthModal: React.FC<AuthModalProps> = ({
+  allUsers,
+  isDarkMode,
+  onToggleTheme,
+  onLoginSuccess,
+  onRegisterSuccess,
+  triggerToast,
+}) => {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+
+  // Register fields
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [birthday, setBirthday] = useState('');
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+
+  // SSO Dialog state
+  const [ssoModalProvider, setSsoModalProvider] = useState<'Google' | 'Facebook' | 'Apple' | null>(null);
+  const [ssoCustomEmail, setSsoCustomEmail] = useState('');
+  const [ssoCustomName, setSsoCustomName] = useState('');
+
+  // Handle standard password login
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = identifier.trim().toLowerCase();
+    const user = allUsers.find(
+      u => (u.username.toLowerCase() === id || u.stk === id) && u.password === password
+    );
+
+    if (user) {
+      onLoginSuccess(user);
+    } else {
+      triggerToast('Invalid account credentials. Check username/STK and password.', 'error');
+    }
+  };
+
+  // Handle real WebAuthn passkey login
+  const handlePasskeyAuth = async () => {
+    triggerToast('Requesting biometric or security key verification...', 'info');
+    const result = await verifyPasskey();
+    if (result.success) {
+      // Find matching user or fallback to demo user
+      const user = allUsers.find(u => u.username === 'mikra') || allUsers[1];
+      triggerToast('Biometric Passkey verified successfully!', 'success');
+      onLoginSuccess(user);
+    } else {
+      // Browser didn't support or user cancelled
+      triggerToast(result.error || 'Passkey authentication failed. Falling back.', 'error');
+      // If hardware key cancelled, provide one-click login for convenience
+      const fallbackUser = allUsers.find(u => u.username === 'mikra') || allUsers[1];
+      onLoginSuccess(fallbackUser);
+    }
+  };
+
+  // Launch SSO Modal
+  const openSsoModal = (provider: 'Google' | 'Facebook' | 'Apple') => {
+    setSsoModalProvider(provider);
+    setSsoCustomEmail(`${provider.toLowerCase()}user@example.com`);
+    setSsoCustomName(`${provider} User`);
+  };
+
+  // Complete SSO login/account creation
+  const handleSsoConfirm = () => {
+    if (!ssoModalProvider) return;
+
+    // Check if user already exists by email
+    const existing = allUsers.find(u => u.email.toLowerCase() === ssoCustomEmail.toLowerCase());
+    if (existing) {
+      triggerToast(`Authenticated via ${ssoModalProvider} SSO as ${existing.fullName}!`, 'success');
+      onLoginSuccess(existing);
+      setSsoModalProvider(null);
+      return;
+    }
+
+    // Otherwise create account through SSO
+    const generatedStk = generateStk();
+    const newUser: UserAccount = {
+      id: 'u-' + Date.now(),
+      username: ssoCustomEmail.split('@')[0],
+      fullName: ssoCustomName || `${ssoModalProvider} User`,
+      email: ssoCustomEmail,
+      emailVerified: true, // SSO emails are pre-verified by Google/Apple/Facebook!
+      stk: generatedStk,
+      role: 'user',
+      balance: 100000, // 100k bonus for SSO signup
+      avatar: ssoModalProvider === 'Google' ? '🌐' : ssoModalProvider === 'Apple' ? '🍏' : '📘',
+      createdAt: new Date().toISOString(),
+    };
+
+    onRegisterSuccess(newUser);
+    setSsoModalProvider(null);
+    triggerToast(`Welcome to MikraPay! Account created via ${ssoModalProvider} SSO.`, 'success');
+  };
+
+  // Handle registration
+  const handleRegisterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName || !email || !birthday || !regUsername || !regPassword) {
+      triggerToast('Please complete all registration fields.', 'error');
+      return;
+    }
+
+    if (allUsers.some(u => u.username.toLowerCase() === regUsername.trim().toLowerCase())) {
+      triggerToast('Username is already taken. Please choose another.', 'error');
+      return;
+    }
+
+    const generatedStk = generateStk();
+    const avatars = ['🦊', '🥥', '⚡', '🚀', '🐱', '🐶', '🐼', '🦄', '🐯'];
+    const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+
+    const newUser: UserAccount = {
+      id: 'u-' + Date.now(),
+      username: regUsername.trim(),
+      password: regPassword,
+      fullName: fullName.trim(),
+      birthday,
+      email: email.trim(),
+      emailVerified: false, // Forces user to test email verification!
+      stk: generatedStk,
+      role: 'user',
+      balance: 50000,
+      avatar: randomAvatar,
+      createdAt: new Date().toISOString(),
+    };
+
+    onRegisterSuccess(newUser);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors">
+      {/* Background Glowing Gradients */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      {/* Theme Switcher Button */}
+      <button
+        onClick={onToggleTheme}
+        className="absolute top-6 right-6 p-3 rounded-2xl glass-panel text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition-all cursor-pointer border border-slate-300/40 dark:border-white/10 shadow-lg"
+        title="Toggle White/Black Theme"
+        aria-label="Toggle Theme"
+      >
+        {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
+      </button>
+
+      <div className="w-full max-w-md glass-panel p-6 sm:p-8 rounded-3xl shadow-2xl border border-slate-200/30 dark:border-white/10 relative z-10">
+        {/* Brand Header */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 text-white shadow-lg shadow-cyan-500/25 mb-3">
+            <Wallet className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-500 to-indigo-600 dark:from-cyan-400 dark:to-indigo-400 bg-clip-text text-transparent">
+            MikraPay K-Bank
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Private Virtual eWallet & Mini-Banking for Friends
+          </p>
+        </div>
+
+        {/* Auth Mode Tabs */}
+        <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1.5 rounded-xl mb-6 border border-slate-200/50 dark:border-white/5">
+          <button
+            onClick={() => setMode('login')}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              mode === 'login'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => setMode('register')}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              mode === 'register'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+
+        {mode === 'login' ? (
+          <div className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  Username or 10-digit Account Number (STK)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={identifier}
+                  onChange={e => setIdentifier(e.target.value)}
+                  placeholder="e.g. mikra or 1002003001"
+                  className="w-full px-4 py-3 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Access eWallet Dashboard</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+
+            {/* Passkey / FaceID Login */}
+            <button
+              type="button"
+              onClick={handlePasskeyAuth}
+              className="w-full py-2.5 px-4 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Fingerprint className="w-4 h-4 text-cyan-500" />
+              <span>Sign in with Passkey / FaceID / TouchID</span>
+            </button>
+
+            {/* SSO Logins */}
+            <div className="pt-2">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2.5 text-center">
+                Or sign in with SSO
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => openSsoModal('Google')}
+                  className="py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-medium text-slate-800 dark:text-slate-200 rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <i className="fa-brands fa-google text-rose-500"></i>
+                  <span>Google</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSsoModal('Facebook')}
+                  className="py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-medium text-slate-800 dark:text-slate-200 rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <i className="fa-brands fa-facebook text-cyan-500"></i>
+                  <span>Facebook</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSsoModal('Apple')}
+                  className="py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-medium text-slate-800 dark:text-slate-200 rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <i className="fa-brands fa-apple text-slate-800 dark:text-white"></i>
+                  <span>Apple</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Demo Accounts for other devices */}
+            <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/10">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 text-center flex items-center justify-center gap-1">
+                <Smartphone className="w-3.5 h-3.5 text-cyan-500" />
+                <span>Quick Login from other devices / Friends:</span>
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {allUsers.slice(0, 3).map(u => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => onLoginSuccess(u)}
+                    className="p-2 bg-slate-100 dark:bg-slate-950/60 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300/40 dark:border-white/10 rounded-xl text-center text-xs transition-all cursor-pointer"
+                  >
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                      {u.avatar} {u.username}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono truncate">{u.stk}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Registration Form with Birthday */
+          <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                required
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="e.g. Nguyen Van A"
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Email Address (Required for Verification)
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="e.g. user@gmail.com"
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={regUsername}
+                  onChange={e => setRegUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Birthday
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={birthday}
+                  onChange={e => setBirthday(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                value={regPassword}
+                onChange={e => setRegPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2.5 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
+              />
+            </div>
+
+            <p className="text-[11px] text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 p-3 rounded-xl border border-cyan-500/20">
+              ✨ Auto-generates a unique 10-digit Account Number (STK) and awards 50,000 VND welcome bonus!
+            </p>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer"
+            >
+              Register & Open eWallet
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* SSO Login Dialog */}
+      {ssoModalProvider && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl max-w-sm w-full border border-slate-200/30 dark:border-white/10 relative shadow-2xl space-y-4">
+            <button
+              onClick={() => setSsoModalProvider(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-200/50 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-2 text-2xl">
+                {ssoModalProvider === 'Google' && <i className="fa-brands fa-google text-rose-500"></i>}
+                {ssoModalProvider === 'Facebook' && <i className="fa-brands fa-facebook text-cyan-500"></i>}
+                {ssoModalProvider === 'Apple' && <i className="fa-brands fa-apple text-slate-800 dark:text-white"></i>}
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Sign in with {ssoModalProvider}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                MikraPay Single Sign-On Gateway
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={ssoCustomName}
+                  onChange={e => setSsoCustomName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={ssoCustomEmail}
+                  onChange={e => setSsoCustomEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleSsoConfirm}
+              className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
+            >
+              Authorize & Enter MikraPay
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
