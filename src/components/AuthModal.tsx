@@ -48,15 +48,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [ssoCustomEmail, setSsoCustomEmail] = useState('');
   const [ssoCustomName, setSsoCustomName] = useState('');
 
-  // 2FA Challenge State
-  const [pending2FaUser, setPending2FaUser] = useState<UserAccount | null>(null);
-  const [pending2FaOtp, setPending2FaOtp] = useState<{ code: string; expiresAt: number } | null>(null);
   const [input2FaCode, setInput2FaCode] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
 
   // Quick Login Code State
   const [quickCodeInput, setQuickCodeInput] = useState('');
   const [quickCodeLoading, setQuickCodeLoading] = useState(false);
   const [showAuthQrScanner, setShowAuthQrScanner] = useState(false);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput === '1235') {
+      const admin = allUsers.find(u => u.username === 'admin');
+      if (admin) {
+        setShowPinModal(false);
+        setPinInput('');
+        triggerToast('Admin access via PIN successful.', 'success');
+        check2FaOrLogin(admin);
+      } else {
+        triggerToast('Admin account not found.', 'error');
+      }
+    } else {
+      triggerToast('Invalid Admin PIN.', 'error');
+    }
+  };
 
   const handleQuickLoginWithCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,6 +310,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </button>
 
       <div className="w-full max-w-md glass-panel p-6 sm:p-8 rounded-3xl shadow-2xl border border-slate-200/30 dark:border-white/10 relative z-10">
+        {/* Admin Shortcut Button */}
+        <button
+          onClick={() => setShowPinModal(true)}
+          className="absolute top-4 left-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-all"
+          title="Admin Access"
+        >
+          <Shield className="w-5 h-5" />
+        </button>
+
         {/* Brand Header */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 text-white shadow-lg shadow-cyan-500/25 mb-3">
@@ -306,6 +331,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             Private Virtual eWallet & Mini-Banking for Friends
           </p>
         </div>
+
+        {/* Admin PIN Modal */}
+        {showPinModal && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="glass-panel p-8 rounded-3xl max-w-sm w-full border border-slate-200/30 dark:border-white/10 shadow-2xl space-y-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white text-center">Admin Access</h3>
+              <form onSubmit={handlePinSubmit} className="space-y-4">
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={pinInput}
+                  onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter 4-digit PIN"
+                  className="w-full px-4 py-3 rounded-xl glass-input text-center text-xl font-mono font-bold tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowPinModal(false); setPinInput(''); }}
+                    className="flex-1 py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 font-semibold text-sm rounded-xl transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm rounded-xl transition-all"
+                  >
+                    Enter
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Auth Mode Tabs */}
         <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1.5 rounded-xl mb-6 border border-slate-200/50 dark:border-white/5">

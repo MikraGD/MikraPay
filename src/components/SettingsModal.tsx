@@ -401,8 +401,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {quickLoginCode && (
                   <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-center space-y-3 animate-fadeIn">
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">
+                      Quick Login Active
+                    </div>
                     <div className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                      Your Quick Login Code (Valid for 5 minutes):
+                      Enter this code on your NEW, unlogged-in device:
                     </div>
                     <div className="text-3xl font-mono font-extrabold tracking-widest text-cyan-500">
                       {quickLoginCode}
@@ -413,7 +416,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     )}
                     <p className="text-[11px] text-slate-500">
-                      Scan this QR code with your camera or enter the 6 digits on your other device login screen.
+                      On your new device, select "Quick Login" and enter this code or scan this QR.
                     </p>
                   </div>
                 )}
