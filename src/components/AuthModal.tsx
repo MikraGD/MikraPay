@@ -12,7 +12,6 @@ import { UserAccount } from '../types';
 import { generateStk, generateOtp, verifyOtpCode } from '../utils/rules';
 import { verifyPasskey } from '../utils/webauthn';
 import { auth, googleProvider, signInWithPopup } from '../firebase';
-import { consumeQuickLoginCode } from '../utils/storage';
 import { QrScannerModal } from './QrScannerModal';
 
 interface AuthModalProps {
@@ -543,40 +542,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
-            {/* Quick Login from other devices using 6-digit code */}
-            <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/10">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 text-center flex items-center justify-center gap-1">
-                <Smartphone className="w-3.5 h-3.5 text-cyan-500" />
-                <span>Quick Login from other device (6-digit code):</span>
+            {/* Quick Login Request (Initiator) */}
+            <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/10 text-center">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
+                <Smartphone className="w-3.5 h-3.5 inline text-cyan-500" />
+                <span> Initiate Quick Login from this device:</span>
               </p>
-              <form onSubmit={handleQuickLoginWithCode} className="flex gap-2">
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={quickCodeInput}
-                  onChange={e => setQuickCodeInput(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter 6-digit code"
-                  className="flex-1 px-3 py-2.5 rounded-xl glass-input text-center text-sm font-mono font-bold tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
-                />
+              
+              {!quickCodeInput ? (
                 <button
-                  type="submit"
-                  disabled={quickCodeInput.length !== 6 || quickCodeLoading}
-                  className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer shrink-0"
+                  onClick={async () => {
+                    setQuickCodeLoading(true);
+                    const { initiateQuickLoginRequest } = await import('../utils/storage');
+                    const { code } = await initiateQuickLoginRequest();
+                    setQuickCodeInput(code);
+                    const { generateQrDataUrl } = await import('../utils/qr');
+                    const qrUrl = await generateQrDataUrl(`mikrapay://quicklogin?code=${code}`);
+                    setQuickCodeLoading(false);
+                    // Start listening for approval
+                    const { listenForQuickLoginApproval } = await import('../utils/storage');
+                    const unsubscribe = listenForQuickLoginApproval(code, (stk) => {
+                      unsubscribe();
+                      // Find user by stk
+                      const user = allUsers.find(u => u.stk === stk);
+                      if (user) {
+                        triggerToast(`Quick Login approved! Signing in as ${user.fullName}...`, 'success');
+                        check2FaOrLogin(user);
+                      }
+                    });
+                  }}
+                  disabled={quickCodeLoading}
+                  className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
                 >
-                  {quickCodeLoading ? 'Signing in...' : 'Quick Login'}
+                  {quickCodeLoading ? 'Generating...' : 'Start Quick Login Request'}
                 </button>
-              </form>
-
-              <div className="mt-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowAuthQrScanner(true)}
-                  className="w-full py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <QrCode className="w-4 h-4 text-cyan-500" />
-                  <span>Scan Quick Login QR Code</span>
-                </button>
-              </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-center space-y-3">
+                  <div className="text-xs text-slate-600 dark:text-slate-300">Enter this code on your logged-in device:</div>
+                  <div className="text-3xl font-mono font-extrabold tracking-widest text-cyan-500">{quickCodeInput}</div>
+                  {/* QR would be here too */}
+                  <p className="text-[10px] text-slate-500">Waiting for approval...</p>
+                </div>
+              )}
             </div>
           </div>
         ) : (

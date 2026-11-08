@@ -12,48 +12,47 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [];
 
 export const INITIAL_SAVINGS: SavingsVault[] = [];
 
-export async function generateQuickLoginCode(stk: string): Promise<string> {
+export async function initiateQuickLoginRequest(): Promise<{ code: string }> {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
   try {
     await setDoc(doc(db, 'quick_logins', code), {
       code,
-      stk,
-      expiresAt,
-      createdAt: new Date().toISOString()
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      expiresAt
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `quick_logins/${code}`);
   }
-  return code;
+  return { code };
 }
 
-export async function consumeQuickLoginCode(code: string, allUsers: UserAccount[]): Promise<UserAccount | null> {
-  try {
-    // We can query doc directly from Firestore
-    const { getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(db, 'quick_logins', code));
-    if (!snap.exists()) {
-      return null;
-    }
+export function listenForQuickLoginApproval(code: string, onApproved: (stk: string) => void) {
+  return onSnapshot(doc(db, 'quick_logins', code), (snap) => {
     const data = snap.data();
-    if (!data || Date.now() > data.expiresAt) {
-      return null;
+    if (data && data.status === 'approved' && data.stk) {
+      onApproved(data.stk);
     }
-    const stk = data.stk;
-    const user = allUsers.find(u => u.stk === stk);
-    if (!user) {
-      // If not in local users list, fetch from users collection
-      const userSnap = await getDoc(doc(db, 'users', stk));
-      if (userSnap.exists()) {
-        return userSnap.data() as UserAccount;
-      }
-      return null;
-    }
-    return user;
+  });
+}
+
+export async function approveQuickLoginRequest(code: string, stk: string): Promise<boolean> {
+  try {
+    const { getDoc, updateDoc } = await import('firebase/firestore');
+    const docRef = doc(db, 'quick_logins', code);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return false;
+    
+    await updateDoc(docRef, {
+      status: 'approved',
+      stk,
+      approvedAt: new Date().toISOString()
+    });
+    return true;
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, `quick_logins/${code}`);
-    return null;
+    handleFirestoreError(err, OperationType.UPDATE, `quick_logins/${code}`);
+    return false;
   }
 }
 

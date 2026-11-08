@@ -16,7 +16,6 @@ import {
   generateOtp,
   verifyOtpCode
 } from '../utils/rules';
-import { generateQuickLoginCode } from '../utils/storage';
 import { generateQrDataUrl } from '../utils/qr';
 
 interface SettingsModalProps {
@@ -381,45 +380,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Smartphone className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Quick Login from Other Devices</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Quick Login Approval</h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Generate a temporary 6-digit code here on your logged-in device, then type it on another unlogged-in browser to instantly sign in.
+                      Enter the 6-digit code from the new device you want to log in.
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (quickLoginCode && quickLoginCode.length === 6) {
+                    setQuickLoginLoading(true);
+                    const { approveQuickLoginRequest } = await import('../utils/storage');
+                    const success = await approveQuickLoginRequest(quickLoginCode, session.stk);
+                    setQuickLoginLoading(false);
+                    if (success) {
+                      triggerToast('Quick Login approved successfully!', 'success');
+                      setQuickLoginCode('');
+                    } else {
+                      triggerToast('Invalid or expired Quick Login code.', 'error');
+                    }
+                  }
+                }} className="space-y-3">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={quickLoginCode || ''}
+                    onChange={e => setQuickLoginCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter 6-digit code"
+                    className="w-full px-4 py-3 rounded-xl glass-input text-center text-xl font-mono font-bold tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                  />
                   <button
-                    onClick={handleGenerateQuickLogin}
-                    disabled={quickLoginLoading}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    type="submit"
+                    disabled={quickLoginLoading || !quickLoginCode || quickLoginCode.length !== 6}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer"
                   >
-                    <Smartphone className="w-4 h-4" />
-                    <span>{quickLoginLoading ? 'Generating Code...' : 'Generate 6-Digit Quick Login Code'}</span>
+                    {quickLoginLoading ? 'Approving...' : 'Approve Quick Login'}
                   </button>
-                </div>
-
-                {quickLoginCode && (
-                  <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-center space-y-3 animate-fadeIn">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">
-                      Quick Login Active
-                    </div>
-                    <div className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                      Enter this code on your NEW, unlogged-in device:
-                    </div>
-                    <div className="text-3xl font-mono font-extrabold tracking-widest text-cyan-500">
-                      {quickLoginCode}
-                    </div>
-                    {quickLoginQrUrl && (
-                      <div className="bg-white p-3 rounded-2xl inline-block shadow-lg mx-auto border border-slate-200">
-                        <img src={quickLoginQrUrl} alt="Quick Login QR" className="w-44 h-44 mx-auto rounded-lg" />
-                      </div>
-                    )}
-                    <p className="text-[11px] text-slate-500">
-                      On your new device, select "Quick Login" and enter this code or scan this QR.
-                    </p>
-                  </div>
-                )}
+                </form>
               </div>
             </div>
           )}
