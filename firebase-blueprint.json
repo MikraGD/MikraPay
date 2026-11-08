@@ -15,6 +15,9 @@
         "role": { "type": "string", "enum": ["admin", "user"] },
         "balance": { "type": "number" },
         "avatar": { "type": "string", "maxLength": 16 },
+        "passkeyRegistered": { "type": "boolean" },
+        "passkeyCredentialId": { "type": "string", "maxLength": 256 },
+        "twoFactorEnabled": { "type": "boolean" },
         "createdAt": { "type": "string" }
       },
       "required": ["username", "fullName", "email", "stk", "role", "balance"]

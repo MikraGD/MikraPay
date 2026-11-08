@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Wallet, LogOut, Sun, Moon, Copy, Check, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Wallet, LogOut, Sun, Moon, Copy, Check, ShieldCheck, AlertCircle, Settings } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface NavbarProps {
@@ -13,6 +13,7 @@ interface NavbarProps {
   onToggleTheme: () => void;
   onLogout: () => void;
   onOpenVerifyModal: () => void;
+  onOpenSettings: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleTheme,
   onLogout,
   onOpenVerifyModal,
+  onOpenSettings,
 }) => {
   const [copiedStk, setCopiedStk] = useState(false);
 
@@ -51,7 +53,18 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* User Controls & Info */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        {/* Settings Button */}
+        <button
+          onClick={onOpenSettings}
+          className="p-2.5 rounded-xl glass-panel text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer border border-slate-300/30 dark:border-white/10 shadow-sm flex items-center gap-1.5"
+          title="Account & Security Settings"
+          aria-label="Account Settings"
+        >
+          <Settings className="w-4 h-4 text-cyan-500" />
+          <span className="hidden lg:inline text-xs font-semibold">Settings</span>
+        </button>
+
         {/* Theme Mode Toggle (White / Black mode) */}
         <button
           onClick={onToggleTheme}

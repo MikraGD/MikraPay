@@ -163,3 +163,54 @@ export function verifyOtpCode(
   }
   return { valid: true };
 }
+
+export function validateEmailChange(
+  currentEmail: string,
+  newEmail: string,
+  allUsers: UserAccount[]
+): { valid: boolean; error?: string } {
+  const clean = newEmail.trim().toLowerCase();
+  if (!clean) {
+    return { valid: false, error: 'Please enter a valid email address.' };
+  }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(clean)) {
+    return { valid: false, error: 'Invalid email format. E.g. name@domain.com' };
+  }
+  if (clean === currentEmail.trim().toLowerCase()) {
+    return { valid: false, error: 'The new email must be different from your current email.' };
+  }
+  const exists = allUsers.some(u => u.email.toLowerCase() === clean);
+  if (exists) {
+    return { valid: false, error: 'This email is already registered to another account.' };
+  }
+  return { valid: true };
+}
+
+export function validatePasswordChange(
+  currentPassword?: string,
+  inputOldPassword?: string,
+  newPassword?: string,
+  confirmPassword?: string
+): { valid: boolean; error?: string } {
+  if (currentPassword && inputOldPassword !== currentPassword) {
+    return { valid: false, error: 'Current password does not match.' };
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return { valid: false, error: 'New password must be at least 6 characters long.' };
+  }
+  if (newPassword !== confirmPassword) {
+    return { valid: false, error: 'New password and confirmation do not match.' };
+  }
+  return { valid: true };
+}
+
+export function validateTwoFactorCode(
+  inputCode: string,
+  expectedCode: string,
+  expiresAt: number,
+  now: number = Date.now()
+): { valid: boolean; error?: string } {
+  return verifyOtpCode(inputCode, expectedCode, expiresAt, now);
+}
+

@@ -9,7 +9,7 @@ import {
   Shield, Smartphone, X
 } from 'lucide-react';
 import { UserAccount } from '../types';
-import { generateStk } from '../utils/rules';
+import { generateStk, generateOtp, verifyOtpCode } from '../utils/rules';
 import { verifyPasskey } from '../utils/webauthn';
 import { auth, googleProvider, signInWithPopup } from '../firebase';
 
@@ -46,6 +46,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [ssoCustomEmail, setSsoCustomEmail] = useState('');
   const [ssoCustomName, setSsoCustomName] = useState('');
 
+  // 2FA Challenge State
+  const [pending2FaUser, setPending2FaUser] = useState<UserAccount | null>(null);
+  const [pending2FaOtp, setPending2FaOtp] = useState<{ code: string; expiresAt: number } | null>(null);
+  const [input2FaCode, setInput2FaCode] = useState('');
+
+  // Helper to trigger 2FA if enabled on the account, otherwise login
+  const check2FaOrLogin = (user: UserAccount) => {
+    if (user.twoFactorEnabled) {
+      const code = generateOtp();
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      setPending2FaOtp({ code, expiresAt });
+      setPending2FaUser(user);
+      setInput2FaCode('');
+      triggerToast(`Two-Factor Authentication required for ${user.username}. Security code dispatched.`, 'info');
+    } else {
+      onLoginSuccess(user);
+    }
+  };
+
+  // Complete 2FA Login
+  const handleVerify2FaLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pending2FaUser || !pending2FaOtp) return;
+    const verification = verifyOtpCode(input2FaCode, pending2FaOtp.code, pending2FaOtp.expiresAt);
+    if (!verification.valid) {
+      triggerToast(verification.error || 'Invalid 2FA verification code.', 'error');
+      return;
+    }
+    triggerToast('2FA code verified successfully!', 'success');
+    const userToLogin = pending2FaUser;
+    setPending2FaUser(null);
+    setPending2FaOtp(null);
+    onLoginSuccess(userToLogin);
+  };
+
   // Handle standard password login
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,27 +90,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     );
 
     if (user) {
-      onLoginSuccess(user);
+      check2FaOrLogin(user);
     } else {
       triggerToast('Invalid account credentials. Check username/STK and password.', 'error');
     }
   };
 
-  // Handle real WebAuthn passkey login
+  // Handle real WebAuthn passkey login - STRICTLY NO FALLBACK
   const handlePasskeyAuth = async () => {
-    triggerToast('Requesting biometric or security key verification...', 'info');
+    triggerToast('Requesting biometric or hardware security key verification...', 'info');
     const result = await verifyPasskey();
-    if (result.success) {
-      // Find matching user or fallback to demo user
-      const user = allUsers.find(u => u.username === 'mikra') || allUsers[1];
-      triggerToast('Biometric Passkey verified successfully!', 'success');
-      onLoginSuccess(user);
+
+    if (result.success && result.credentialId) {
+      // Look for a user who registered this specific passkey
+      const matchedUser = allUsers.find(
+        u => u.passkeyRegistered && u.passkeyCredentialId === result.credentialId
+      );
+
+      if (matchedUser) {
+        triggerToast(`Passkey verified! Welcome back, ${matchedUser.fullName}.`, 'success');
+        check2FaOrLogin(matchedUser);
+        return;
+      }
+
+      // Check if any user registered a passkey
+      const registeredUsers = allUsers.filter(u => u.passkeyRegistered);
+      if (registeredUsers.length === 1) {
+        triggerToast(`Passkey verified! Signed in as ${registeredUsers[0].fullName}.`, 'success');
+        check2FaOrLogin(registeredUsers[0]);
+        return;
+      }
+
+      triggerToast('Passkey verified, but no MikraPay account is linked to this credential. Please sign in with password first and add your passkey in Settings.', 'error');
     } else {
-      // Browser didn't support or user cancelled
-      triggerToast(result.error || 'Passkey authentication failed. Falling back.', 'error');
-      // If hardware key cancelled, provide one-click login for convenience
-      const fallbackUser = allUsers.find(u => u.username === 'mikra') || allUsers[1];
-      onLoginSuccess(fallbackUser);
+      // STRICTLY NO FALLBACK - report exact error
+      triggerToast(result.error || 'Passkey verification failed or was cancelled.', 'error');
     }
   };
 
@@ -242,7 +291,70 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
-        {mode === 'login' ? (
+        {pending2FaUser ? (
+          /* 2FA Verification Challenge Screen */
+          <div className="space-y-4 animate-fadeIn">
+            <div className="text-center p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-500 flex items-center justify-center mx-auto mb-2">
+                <Shield className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Two-Factor Verification Required
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Security check for <strong className="text-slate-800 dark:text-slate-200">{pending2FaUser.fullName}</strong> ({pending2FaUser.email})
+              </p>
+            </div>
+
+            {pending2FaOtp && (
+              <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs flex items-center justify-between">
+                <span className="text-cyan-700 dark:text-cyan-300">Simulated 2FA Code:</span>
+                <span className="font-mono font-bold text-base tracking-widest text-cyan-500">
+                  {pending2FaOtp.code}
+                </span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerify2FaLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 text-center">
+                  Enter 6-Digit Security Code
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={input2FaCode}
+                  onChange={e => setInput2FaCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••••"
+                  className="w-full px-4 py-3 rounded-xl glass-input text-center text-xl font-mono font-bold tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={input2FaCode.length !== 6}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Verify & Complete Sign In</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPending2FaUser(null);
+                  setPending2FaOtp(null);
+                  setInput2FaCode('');
+                }}
+                className="w-full py-2.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-semibold"
+              >
+                Cancel & Return to Login
+              </button>
+            </form>
+          </div>
+        ) : mode === 'login' ? (
           <div className="space-y-4">
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div>
@@ -336,7 +448,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     key={u.id}
                     type="button"
-                    onClick={() => onLoginSuccess(u)}
+                    onClick={() => check2FaOrLogin(u)}
                     className="p-2 bg-slate-100 dark:bg-slate-950/60 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300/40 dark:border-white/10 rounded-xl text-center text-xs transition-all cursor-pointer"
                   >
                     <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">

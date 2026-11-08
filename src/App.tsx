@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Wallet, Send, CreditCard, PiggyBank, Sparkles, Shield,
-  History, Download, CheckCircle, XCircle, AlertCircle, ArrowUpRight, ArrowDownLeft
+  History, Download, CheckCircle, XCircle, AlertCircle, ArrowUpRight, ArrowDownLeft,
+  Settings
 } from 'lucide-react';
 import { UserAccount, Transaction, WalletRequest, SavingsVault } from './types';
 import {
@@ -31,6 +32,7 @@ import { AuthModal } from './components/AuthModal';
 import { QrCodeModal } from './components/QrCodeModal';
 import { QrScannerModal } from './components/QrScannerModal';
 import { EmailVerificationModal } from './components/EmailVerificationModal';
+import { SettingsModal } from './components/SettingsModal';
 
 export default function App() {
   // Theme state: Black mode (dark) vs White mode (light)
@@ -66,6 +68,7 @@ export default function App() {
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [showQrScanner, setShowQrScanner] = useState<boolean>(false);
   const [showVerifyModal, setShowVerifyModal] = useState<boolean>(false);
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [pendingVerifyAction, setPendingVerifyAction] = useState<'transfer' | 'deposit' | 'withdraw' | null>(null);
 
   // Toast System
@@ -136,6 +139,11 @@ export default function App() {
     setSession(null);
     setActiveTab('dashboard');
     triggerToast('Logged out securely.', 'info');
+  };
+
+  const handleUpdateSessionUser = (updatedUser: UserAccount) => {
+    setUsers(prev => prev.map(u => (u.stk === updatedUser.stk ? updatedUser : u)));
+    setSession(updatedUser);
   };
 
   // Quick Re-Transfer selection from widget
@@ -388,6 +396,7 @@ export default function App() {
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         onLogout={handleLogout}
         onOpenVerifyModal={() => handleRequireEmailVerification('transfer')}
+        onOpenSettings={() => setShowSettingsModal(true)}
       />
 
       {/* Main Layout */}
@@ -456,6 +465,14 @@ export default function App() {
           >
             <Sparkles className="w-4 h-4 text-cyan-500" />
             <span>Mikra AI Advisor</span>
+          </button>
+
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-white/5"
+          >
+            <Settings className="w-4 h-4 text-cyan-500" />
+            <span>Account & Security Settings</span>
           </button>
 
           {session.role === 'admin' && (
@@ -643,6 +660,20 @@ export default function App() {
           actionType={pendingVerifyAction || 'transaction'}
           onVerifySuccess={handleEmailVerifySuccess}
           onClose={() => setShowVerifyModal(false)}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal
+          session={session}
+          allUsers={users}
+          onUpdateUser={handleUpdateSessionUser}
+          onClose={() => setShowSettingsModal(false)}
+          triggerToast={triggerToast}
+          onOpenVerifyModal={() => {
+            setShowSettingsModal(false);
+            handleRequireEmailVerification('transfer');
+          }}
         />
       )}
     </div>

@@ -17,6 +17,10 @@ export interface UserAccount {
   avatar: string;
   passkeyRegistered?: boolean;
   passkeyCredentialId?: string;
+  passkeyDeviceName?: string;
+  passkeyRegisteredAt?: string;
+  twoFactorEnabled?: boolean;
+  twoFactorType?: 'email' | 'totp';
   createdAt: string;
 }
 

@@ -26,17 +26,19 @@ export async function createPasskey(username: string, displayName: string): Prom
     window.crypto.getRandomValues(challenge);
 
     const userIdBuffer = strToBuffer(username);
+    const hostname = window.location.hostname;
+    // rpId is valid if domain is non-empty; if omitted, browser uses origin domain
+    const rpConfig = hostname && hostname.includes('.')
+      ? { name: 'MikraPay K-Bank', id: hostname }
+      : { name: 'MikraPay K-Bank' };
 
     const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
       challenge,
-      rp: {
-        name: 'MikraPay K-Bank',
-        id: window.location.hostname || 'localhost',
-      },
+      rp: rpConfig,
       user: {
         id: userIdBuffer,
         name: username,
-        displayName: displayName,
+        displayName: displayName || username,
       },
       pubKeyCredParams: [
         { alg: -7, type: 'public-key' }, // ES256
@@ -45,6 +47,7 @@ export async function createPasskey(username: string, displayName: string): Prom
       authenticatorSelection: {
         authenticatorAttachment: 'platform',
         userVerification: 'preferred',
+        residentKey: 'preferred',
       },
       timeout: 60000,
       attestation: 'none',
@@ -54,18 +57,18 @@ export async function createPasskey(username: string, displayName: string): Prom
       publicKey: publicKeyCredentialCreationOptions,
     })) as PublicKeyCredential | null;
 
-    if (credential) {
+    if (credential && credential.id) {
       return { success: true, credentialId: credential.id };
     }
-    return { success: false, error: 'No credential generated.' };
-  } catch (err: any) {
+    return { success: false, error: 'No passkey credential was created.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn('WebAuthn creation prompt:', err);
-    // User cancelled or platform authenticator unavailable
-    return { success: false, error: err.message || 'Passkey creation was cancelled or unsupported.' };
+    return { success: false, error: msg || 'Passkey registration was cancelled or unsupported on this device.' };
   }
 }
 
-export async function verifyPasskey(): Promise<{ success: boolean; credentialId?: string; error?: string }> {
+export async function verifyPasskey(allowedCredentialId?: string): Promise<{ success: boolean; credentialId?: string; error?: string }> {
   if (!isWebAuthnSupported()) {
     return { success: false, error: 'WebAuthn is not supported on this browser.' };
   }
@@ -74,23 +77,33 @@ export async function verifyPasskey(): Promise<{ success: boolean; credentialId?
     const challenge = new Uint8Array(32);
     window.crypto.getRandomValues(challenge);
 
+    const hostname = window.location.hostname;
+    const rpId = hostname && hostname.includes('.') ? hostname : undefined;
+
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
       challenge,
       timeout: 60000,
       userVerification: 'preferred',
-      rpId: window.location.hostname || 'localhost',
+      ...(rpId ? { rpId } : {}),
+      ...(allowedCredentialId ? {
+        allowCredentials: [{
+          id: strToBuffer(allowedCredentialId),
+          type: 'public-key'
+        }]
+      } : {})
     };
 
     const assertion = (await navigator.credentials.get({
       publicKey: publicKeyCredentialRequestOptions,
     })) as PublicKeyCredential | null;
 
-    if (assertion) {
+    if (assertion && assertion.id) {
       return { success: true, credentialId: assertion.id };
     }
-    return { success: false, error: 'No credential returned.' };
-  } catch (err: any) {
+    return { success: false, error: 'Passkey verification was not completed.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn('WebAuthn assertion error:', err);
-    return { success: false, error: err.message || 'Passkey verification failed or cancelled.' };
+    return { success: false, error: msg || 'Passkey verification failed or was cancelled.' };
   }
 }

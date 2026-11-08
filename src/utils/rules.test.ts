@@ -13,7 +13,10 @@ import {
   validateRequestSubmission,
   executeRequestApproval,
   calculateSavingsProgress,
-  verifyOtpCode
+  verifyOtpCode,
+  validateEmailChange,
+  validatePasswordChange,
+  validateTwoFactorCode
 } from './rules';
 import { UserAccount, WalletRequest } from '../types';
 
@@ -126,3 +129,32 @@ test('verifyOtpCode checks match and expiration', () => {
   const expired = verifyOtpCode('123456', '123456', now - 1000, now);
   assert.equal(expired.valid, false);
 });
+
+test('validateEmailChange validates format and avoids collisions', () => {
+  const invalidFormat = validateEmailChange('user@example.com', 'bad-email', [senderUser]);
+  assert.equal(invalidFormat.valid, false);
+
+  const sameEmail = validateEmailChange('user@example.com', 'user@example.com', [senderUser]);
+  assert.equal(sameEmail.valid, false);
+
+  const collision = validateEmailChange('user@example.com', 'sender@example.com', [senderUser]);
+  assert.equal(collision.valid, false);
+
+  const valid = validateEmailChange('user@example.com', 'newperson@domain.com', [senderUser]);
+  assert.equal(valid.valid, true);
+});
+
+test('validatePasswordChange requires correct current pass and length', () => {
+  const wrongCurrent = validatePasswordChange('oldpass123', 'wrong', 'newsecret', 'newsecret');
+  assert.equal(wrongCurrent.valid, false);
+
+  const shortPass = validatePasswordChange('oldpass123', 'oldpass123', '123', '123');
+  assert.equal(shortPass.valid, false);
+
+  const mismatch = validatePasswordChange('oldpass123', 'oldpass123', 'newsecret', 'different');
+  assert.equal(mismatch.valid, false);
+
+  const valid = validatePasswordChange('oldpass123', 'oldpass123', 'newsecret123', 'newsecret123');
+  assert.equal(valid.valid, true);
+});
+
