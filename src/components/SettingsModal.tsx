@@ -244,7 +244,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // ================= PASSWORD & PROFILE HANDLERS =================
   const handleUpdatePassword = (e: React.FormEvent) => {
     e.preventDefault();
-    const validation = validatePasswordChange(session.password, oldPassword, newPassword, confirmPassword);
+    const isAdmin = session.role === 'admin';
+    const validation = validatePasswordChange(
+      session.password,
+      oldPassword,
+      newPassword,
+      confirmPassword,
+      !isAdmin
+    );
     if (!validation.valid) {
       triggerToast(validation.error || 'Password update failed.', 'error');
       return;
@@ -746,19 +753,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Change Password
                 </h4>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Current Password
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={oldPassword}
-                    onChange={e => setOldPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 dark:text-slate-100"
-                  />
-                </div>
+                {session.role !== 'admin' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Current Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={oldPassword}
+                      onChange={e => setOldPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-4 py-2.5 rounded-xl glass-input text-xs text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

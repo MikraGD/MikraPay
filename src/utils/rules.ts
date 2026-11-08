@@ -191,9 +191,10 @@ export function validatePasswordChange(
   currentPassword?: string,
   inputOldPassword?: string,
   newPassword?: string,
-  confirmPassword?: string
+  confirmPassword?: string,
+  requireOldPassword: boolean = true
 ): { valid: boolean; error?: string } {
-  if (currentPassword && inputOldPassword !== currentPassword) {
+  if (requireOldPassword && currentPassword && inputOldPassword !== currentPassword) {
     return { valid: false, error: 'Current password does not match.' };
   }
   if (!newPassword || newPassword.length < 6) {

@@ -423,6 +423,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   placeholder="••••••••"
                   className="w-full px-4 py-3 rounded-xl glass-input text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={() => triggerToast('Please contact the Admin to reset your password.', 'info')}
+                  className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:underline mt-1.5 inline-block"
+                >
+                  Forgot password?
+                </button>
               </div>
 
               <button
