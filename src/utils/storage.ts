@@ -6,92 +6,65 @@
 import { UserAccount, Transaction, WalletRequest, SavingsVault } from '../types';
 import { db, doc, collection, setDoc, onSnapshot, handleFirestoreError, OperationType } from '../firebase';
 
-export const DEFAULT_USERS: UserAccount[] = [
-  {
-    id: 'u-1',
-    username: 'admin',
-    password: 'admin123',
-    fullName: 'System Admin (Liquidity Vault)',
-    birthday: '1990-01-01',
-    email: 'admin@mikrapay.internal',
-    emailVerified: true,
-    stk: '9999999999',
-    role: 'admin',
-    balance: 1000000,
-    avatar: '👑',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'u-2',
-    username: 'mikra',
-    password: '123456',
-    fullName: 'Mikra Founder',
-    birthday: '1998-05-15',
-    email: 'mikrayoutube@gmail.com',
-    emailVerified: true,
-    stk: '1002003001',
-    role: 'user',
-    balance: 500000,
-    avatar: '🦊',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'u-3',
-    username: 'coocnut1344',
-    password: '123456',
-    fullName: 'Coocnut Friend',
-    birthday: '2000-11-20',
-    email: 'coocnut1344@gmail.com',
-    emailVerified: false,
-    stk: '1002003002',
-    role: 'user',
-    balance: 200000,
-    avatar: '🥥',
-    createdAt: new Date().toISOString()
-  }
-];
+export const DEFAULT_USERS: UserAccount[] = [];
 
-export const INITIAL_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'tx-init-1',
-    senderStk: '9999999999',
-    senderName: 'System Liquidity Vault',
-    receiverStk: '1002003001',
-    receiverName: 'Mikra Founder',
-    amount: 500000,
-    type: 'deposit',
-    note: 'Initial account activation & seed balance',
-    timestamp: new Date().toISOString()
-  },
-  {
-    id: 'tx-init-2',
-    senderStk: '1002003001',
-    senderName: 'Mikra Founder',
-    receiverStk: '1002003002',
-    receiverName: 'Coocnut Friend',
-    amount: 50000,
-    type: 'transfer',
-    note: 'Coffee & snacks split ☕',
-    timestamp: new Date(Date.now() - 3600000).toISOString()
-  }
-];
+export const INITIAL_TRANSACTIONS: Transaction[] = [];
 
-export const INITIAL_SAVINGS: SavingsVault[] = [
-  {
-    id: 'sav-1',
-    userStk: '1002003001',
-    title: 'Da Nang Summer Trip ✈️',
-    targetAmount: 2000000,
-    currentAmount: 450000,
-    category: 'Travel',
-    createdAt: new Date().toISOString()
+export const INITIAL_SAVINGS: SavingsVault[] = [];
+
+export async function generateQuickLoginCode(stk: string): Promise<string> {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+  try {
+    await setDoc(doc(db, 'quick_logins', code), {
+      code,
+      stk,
+      expiresAt,
+      createdAt: new Date().toISOString()
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `quick_logins/${code}`);
   }
-];
+  return code;
+}
+
+export async function consumeQuickLoginCode(code: string, allUsers: UserAccount[]): Promise<UserAccount | null> {
+  try {
+    // We can query doc directly from Firestore
+    const { getDoc } = await import('firebase/firestore');
+    const snap = await getDoc(doc(db, 'quick_logins', code));
+    if (!snap.exists()) {
+      return null;
+    }
+    const data = snap.data();
+    if (!data || Date.now() > data.expiresAt) {
+      return null;
+    }
+    const stk = data.stk;
+    const user = allUsers.find(u => u.stk === stk);
+    if (!user) {
+      // If not in local users list, fetch from users collection
+      const userSnap = await getDoc(doc(db, 'users', stk));
+      if (userSnap.exists()) {
+        return userSnap.data() as UserAccount;
+      }
+      return null;
+    }
+    return user;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, `quick_logins/${code}`);
+    return null;
+  }
+}
 
 export function getStoredUsers(): UserAccount[] {
   try {
     const raw = localStorage.getItem('mikrapay_users');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: UserAccount[] = JSON.parse(raw);
+      const filtered = parsed.filter(u => u.username !== 'admin' && u.username !== 'mikra' && u.username !== 'coocnut1344');
+      return filtered;
+    }
   } catch (e) {
     console.error('Error loading stored users:', e);
   }

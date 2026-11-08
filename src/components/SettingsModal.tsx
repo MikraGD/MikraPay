@@ -16,6 +16,8 @@ import {
   generateOtp,
   verifyOtpCode
 } from '../utils/rules';
+import { generateQuickLoginCode } from '../utils/storage';
+import { generateQrDataUrl } from '../utils/qr';
 
 interface SettingsModalProps {
   session: UserAccount;
@@ -34,11 +36,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   triggerToast,
   onOpenVerifyModal,
 }) => {
-  const [activeTab, setActiveTab] = useState<'passkey' | '2fa' | 'email' | 'security'>('passkey');
+  const [activeTab, setActiveTab] = useState<'passkey' | '2fa' | 'email' | 'security' | 'quicklogin'>('passkey');
 
   // Passkey State
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const webAuthnSupported = isWebAuthnSupported();
+
+  // Quick Login Code State
+  const [quickLoginCode, setQuickLoginCode] = useState<string | null>(null);
+  const [quickLoginQrUrl, setQuickLoginQrUrl] = useState<string | null>(null);
+  const [quickLoginLoading, setQuickLoginLoading] = useState(false);
+
+  const handleGenerateQuickLogin = async () => {
+    setQuickLoginLoading(true);
+    const code = await generateQuickLoginCode(session.stk);
+    setQuickLoginCode(code);
+    try {
+      const qrUrl = await generateQrDataUrl(`mikrapay://quicklogin?code=${code}`);
+      setQuickLoginQrUrl(qrUrl);
+    } catch (e) {
+      console.error(e);
+    }
+    setQuickLoginLoading(false);
+    triggerToast(`Quick Login Code generated: ${code}. Scan QR or enter 6 digits on another device.`, 'success');
+  };
 
   // 2FA State
   const [twoFactorStep, setTwoFactorStep] = useState<'idle' | 'confirming'>('idle');
@@ -328,10 +349,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <KeyRound className="w-4 h-4" />
             <span>Password & Profile</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('quicklogin')}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'quicklogin'
+                ? 'border-cyan-500 text-cyan-600 dark:text-cyan-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" />
+            <span>Quick Login Sync</span>
+          </button>
         </div>
 
         {/* Tab Body */}
         <div className="p-6 overflow-y-auto space-y-6">
+          {/* ================= TAB: QUICK LOGIN SYNC ================= */}
+          {activeTab === 'quicklogin' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl glass-card border border-slate-200/50 dark:border-white/10 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-500 flex items-center justify-center shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Quick Login from Other Devices</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Generate a temporary 6-digit code here on your logged-in device, then type it on another unlogged-in browser to instantly sign in.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={handleGenerateQuickLogin}
+                    disabled={quickLoginLoading}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>{quickLoginLoading ? 'Generating Code...' : 'Generate 6-Digit Quick Login Code'}</span>
+                  </button>
+                </div>
+
+                {quickLoginCode && (
+                  <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-center space-y-3 animate-fadeIn">
+                    <div className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                      Your Quick Login Code (Valid for 5 minutes):
+                    </div>
+                    <div className="text-3xl font-mono font-extrabold tracking-widest text-cyan-500">
+                      {quickLoginCode}
+                    </div>
+                    {quickLoginQrUrl && (
+                      <div className="bg-white p-3 rounded-2xl inline-block shadow-lg mx-auto border border-slate-200">
+                        <img src={quickLoginQrUrl} alt="Quick Login QR" className="w-44 h-44 mx-auto rounded-lg" />
+                      </div>
+                    )}
+                    <p className="text-[11px] text-slate-500">
+                      Scan this QR code with your camera or enter the 6 digits on your other device login screen.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ================= TAB: PASSKEY ================= */}
           {activeTab === 'passkey' && (
             <div className="space-y-4">

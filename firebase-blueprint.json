@@ -68,6 +68,18 @@
         "createdAt": { "type": "string" }
       },
       "required": ["userStk", "title", "targetAmount", "currentAmount", "category"]
+    },
+    "QuickLogin": {
+      "title": "QuickLogin",
+      "description": "Cross-device temporary 6-digit login codes",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 6 },
+        "stk": { "type": "string", "maxLength": 10 },
+        "expiresAt": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["code", "stk", "expiresAt"]
     }
   },
   "firestore": {
@@ -86,6 +98,10 @@
     "/savings/{savingsId}": {
       "schema": "SavingsVault",
       "description": "Goal-based savings vaults"
+    },
+    "/quick_logins/{codeId}": {
+      "schema": "QuickLogin",
+      "description": "Temporary 6-digit quick login sync codes"
     }
   }
 }

@@ -11,8 +11,9 @@ import { UserAccount } from '../types';
 
 interface QrScannerModalProps {
   allUsers: UserAccount[];
-  currentStk: string;
+  currentStk?: string;
   onScanSuccess: (scannedStk: string) => void;
+  onQuickLoginScanned?: (code: string) => void;
   onClose: () => void;
 }
 
@@ -20,6 +21,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   allUsers,
   currentStk,
   onScanSuccess,
+  onQuickLoginScanned,
   onClose,
 }) => {
   const [cameraActive, setCameraActive] = useState<boolean>(false);
@@ -58,9 +60,10 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
           setScanStatus('Scanning QR code from live camera feed...');
           scanLiveFeed();
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
         console.warn('Camera stream could not be started:', err);
-        setCameraError(err.message || 'Unable to access camera. Please allow camera permissions or upload a QR image.');
+        setCameraError(msg || 'Unable to access camera. Please allow camera permissions or upload a QR image.');
         setScanStatus('Camera unavailable. You can upload an image or select a recipient below.');
       }
     };
@@ -99,7 +102,11 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
       });
 
       if (code && code.data) {
-        const { stk } = parseMikraPayPayload(code.data);
+        const { stk, quickLoginCode } = parseMikraPayPayload(code.data);
+        if (quickLoginCode && onQuickLoginScanned) {
+          onQuickLoginScanned(quickLoginCode);
+          return;
+        }
         if (stk) {
           onScanSuccess(stk);
           return;
@@ -128,8 +135,10 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code && code.data) {
-          const { stk } = parseMikraPayPayload(code.data);
-          if (stk) {
+          const { stk, quickLoginCode } = parseMikraPayPayload(code.data);
+          if (quickLoginCode && onQuickLoginScanned) {
+            onQuickLoginScanned(quickLoginCode);
+          } else if (stk) {
             onScanSuccess(stk);
           } else {
             alert('Scanned QR data: ' + code.data);

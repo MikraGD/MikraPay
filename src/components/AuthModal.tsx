@@ -6,12 +6,14 @@
 import React, { useState } from 'react';
 import {
   Wallet, Fingerprint, Sun, Moon, CheckCircle, AlertCircle, ArrowRight,
-  Shield, Smartphone, X
+  Shield, Smartphone, X, QrCode
 } from 'lucide-react';
 import { UserAccount } from '../types';
 import { generateStk, generateOtp, verifyOtpCode } from '../utils/rules';
 import { verifyPasskey } from '../utils/webauthn';
 import { auth, googleProvider, signInWithPopup } from '../firebase';
+import { consumeQuickLoginCode } from '../utils/storage';
+import { QrScannerModal } from './QrScannerModal';
 
 interface AuthModalProps {
   allUsers: UserAccount[];
@@ -50,6 +52,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [pending2FaUser, setPending2FaUser] = useState<UserAccount | null>(null);
   const [pending2FaOtp, setPending2FaOtp] = useState<{ code: string; expiresAt: number } | null>(null);
   const [input2FaCode, setInput2FaCode] = useState('');
+
+  // Quick Login Code State
+  const [quickCodeInput, setQuickCodeInput] = useState('');
+  const [quickCodeLoading, setQuickCodeLoading] = useState(false);
+  const [showAuthQrScanner, setShowAuthQrScanner] = useState(false);
+
+  const handleQuickLoginWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quickCodeInput.length !== 6) {
+      triggerToast('Please enter the 6-digit quick login code generated from your other device.', 'error');
+      return;
+    }
+    setQuickCodeLoading(true);
+    triggerToast('Verifying quick login code from database...', 'info');
+    const user = await consumeQuickLoginCode(quickCodeInput, allUsers);
+    setQuickCodeLoading(false);
+    if (user) {
+      triggerToast(`Quick login successful! Welcome back, ${user.fullName}.`, 'success');
+      check2FaOrLogin(user);
+    } else {
+      triggerToast('Invalid or expired quick login code. Generate a new code in Settings on your logged-in device.', 'error');
+    }
+  };
+
+  const handleAuthQrScanSuccess = async (code: string) => {
+    setShowAuthQrScanner(false);
+    setQuickCodeInput(code);
+    setQuickCodeLoading(true);
+    triggerToast(`Scanned Quick Login Code: ${code}. Signing in...`, 'info');
+    const user = await consumeQuickLoginCode(code, allUsers);
+    setQuickCodeLoading(false);
+    if (user) {
+      triggerToast(`Quick QR Login successful! Welcome back, ${user.fullName}.`, 'success');
+      check2FaOrLogin(user);
+    } else {
+      triggerToast('Invalid or expired quick login QR code.', 'error');
+    }
+  };
 
   // Helper to trigger 2FA if enabled on the account, otherwise login
   const check2FaOrLogin = (user: UserAccount) => {
@@ -437,26 +477,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
-            {/* Quick Demo Accounts for other devices */}
+            {/* Quick Login from other devices using 6-digit code */}
             <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/10">
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 text-center flex items-center justify-center gap-1">
                 <Smartphone className="w-3.5 h-3.5 text-cyan-500" />
-                <span>Quick Login from other devices / Friends:</span>
+                <span>Quick Login from other device (6-digit code):</span>
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                {allUsers.slice(0, 3).map(u => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => check2FaOrLogin(u)}
-                    className="p-2 bg-slate-100 dark:bg-slate-950/60 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-300/40 dark:border-white/10 rounded-xl text-center text-xs transition-all cursor-pointer"
-                  >
-                    <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                      {u.avatar} {u.username}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-mono truncate">{u.stk}</div>
-                  </button>
-                ))}
+              <form onSubmit={handleQuickLoginWithCode} className="flex gap-2">
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={quickCodeInput}
+                  onChange={e => setQuickCodeInput(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter 6-digit code"
+                  className="flex-1 px-3 py-2.5 rounded-xl glass-input text-center text-sm font-mono font-bold tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={quickCodeInput.length !== 6 || quickCodeLoading}
+                  className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer shrink-0"
+                >
+                  {quickCodeLoading ? 'Signing in...' : 'Quick Login'}
+                </button>
+              </form>
+
+              <div className="mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAuthQrScanner(true)}
+                  className="w-full py-2 px-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4 text-cyan-500" />
+                  <span>Scan Quick Login QR Code</span>
+                </button>
               </div>
             </div>
           </div>
@@ -606,6 +659,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {showAuthQrScanner && (
+        <QrScannerModal
+          allUsers={allUsers}
+          onScanSuccess={() => {
+            setShowAuthQrScanner(false);
+          }}
+          onQuickLoginScanned={handleAuthQrScanSuccess}
+          onClose={() => setShowAuthQrScanner(false)}
+        />
       )}
     </div>
   );

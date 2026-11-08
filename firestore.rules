@@ -64,5 +64,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    // Quick Logins Collection
+    match /quick_logins/{codeId} {
+      allow read, write: if true;
+    }
   }
 }

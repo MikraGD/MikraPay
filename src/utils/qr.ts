@@ -35,15 +35,24 @@ export function scanQrFromImageData(imageData: ImageData): string | null {
   }
 }
 
-export function parseMikraPayPayload(data: string): { stk?: string; amount?: number; note?: string } {
-  // Can be simple 10-digit STK, or JSON, or URI format: mikrapay://transfer?stk=1002003001&amount=50000
-  if (/^[0-9]{10}$/.test(data.trim())) {
-    return { stk: data.trim() };
+export function parseMikraPayPayload(data: string): { stk?: string; amount?: number; note?: string; quickLoginCode?: string } {
+  const trimmed = data.trim();
+  if (/^[0-9]{10}$/.test(trimmed)) {
+    return { stk: trimmed };
+  }
+  if (/^[0-9]{6}$/.test(trimmed)) {
+    return { quickLoginCode: trimmed };
   }
 
   try {
-    if (data.startsWith('mikrapay://')) {
-      const url = new URL(data.replace('mikrapay://', 'https://placeholder/'));
+    if (trimmed.startsWith('mikrapay://')) {
+      const url = new URL(trimmed.replace('mikrapay://', 'https://placeholder/'));
+      if (url.hostname === 'quicklogin' || url.pathname.includes('quicklogin') || url.href.includes('quicklogin')) {
+        const code = url.searchParams.get('code') || url.pathname.replace('/', '');
+        if (code && /^[0-9]{6}$/.test(code)) {
+          return { quickLoginCode: code };
+        }
+      }
       const stk = url.searchParams.get('stk') || undefined;
       const amountStr = url.searchParams.get('amount');
       const note = url.searchParams.get('note') || undefined;
