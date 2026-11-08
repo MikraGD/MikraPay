@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered eWallet user profile and balance ledger",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string", "maxLength": 64 },
+        "fullName": { "type": "string", "maxLength": 128 },
+        "birthday": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "emailVerified": { "type": "boolean" },
+        "stk": { "type": "string", "maxLength": 10, "pattern": "^[0-9]{10}$" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "balance": { "type": "number" },
+        "avatar": { "type": "string", "maxLength": 16 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["username", "fullName", "email", "stk", "role", "balance"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Peer-to-peer transfers, deposits, withdrawals, and bonus rewards",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderStk": { "type": "string", "maxLength": 10 },
+        "senderName": { "type": "string", "maxLength": 128 },
+        "receiverStk": { "type": "string", "maxLength": 10 },
+        "receiverName": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["transfer", "deposit", "withdraw", "reward"] },
+        "note": { "type": "string", "maxLength": 256 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["senderStk", "senderName", "receiverStk", "receiverName", "amount", "type", "timestamp"]
+    },
+    "WalletRequest": {
+      "title": "WalletRequest",
+      "description": "Deposit and withdrawal requests submitted to System Admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userStk": { "type": "string", "maxLength": 10 },
+        "userName": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["deposit", "withdraw"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["userStk", "userName", "type", "amount", "status", "timestamp"]
+    },
+    "SavingsVault": {
+      "title": "SavingsVault",
+      "description": "Goal-based savings vaults",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userStk": { "type": "string", "maxLength": 10 },
+        "title": { "type": "string", "maxLength": 128 },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "category": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userStk", "title", "targetAmount", "currentAmount", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and ledger balance"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Recorded money transfers and ledger transactions"
+    },
+    "/requests/{requestId}": {
+      "schema": "WalletRequest",
+      "description": "Deposit and withdrawal approval requests"
+    },
+    "/savings/{savingsId}": {
+      "schema": "SavingsVault",
+      "description": "Goal-based savings vaults"
+    }
+  }
+}

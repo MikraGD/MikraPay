@@ -11,6 +11,7 @@ import {
 import { UserAccount } from '../types';
 import { generateStk } from '../utils/rules';
 import { verifyPasskey } from '../utils/webauthn';
+import { auth, googleProvider, signInWithPopup } from '../firebase';
 
 interface AuthModalProps {
   allUsers: UserAccount[];
@@ -78,8 +79,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Launch SSO Modal
-  const openSsoModal = (provider: 'Google' | 'Facebook' | 'Apple') => {
+  // Launch SSO Modal with Firebase Google Auth integration
+  const openSsoModal = async (provider: 'Google' | 'Facebook' | 'Apple') => {
+    if (provider === 'Google') {
+      try {
+        triggerToast('Opening Google Authentication...', 'info');
+        const res = await signInWithPopup(auth, googleProvider);
+        if (res && res.user) {
+          const email = res.user.email || 'googleuser@gmail.com';
+          const name = res.user.displayName || 'Google User';
+          const existing = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+          if (existing) {
+            triggerToast(`Signed in with Google as ${existing.fullName}!`, 'success');
+            onLoginSuccess(existing);
+            return;
+          }
+          const generatedStk = generateStk();
+          const newUser: UserAccount = {
+            id: res.user.uid,
+            username: email.split('@')[0],
+            fullName: name,
+            email,
+            emailVerified: true,
+            stk: generatedStk,
+            role: 'user',
+            balance: 100000,
+            avatar: '🌐',
+            createdAt: new Date().toISOString(),
+          };
+          onRegisterSuccess(newUser);
+          triggerToast(`Welcome ${name}! Authenticated with Google Firebase Auth.`, 'success');
+          return;
+        }
+      } catch (err: any) {
+        console.warn('Firebase Google Auth popup:', err);
+      }
+    }
     setSsoModalProvider(provider);
     setSsoCustomEmail(`${provider.toLowerCase()}user@example.com`);
     setSsoCustomName(`${provider} User`);

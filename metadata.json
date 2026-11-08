@@ -2,5 +2,7 @@
   "name": "MikraPay Virtual eWallet",
   "description": "Private eWallet and mini-banking web application for friends with secure authentication, peer-to-peer transfers, savings vaults, and AI financial advisor.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

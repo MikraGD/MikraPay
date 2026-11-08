@@ -4,6 +4,7 @@
  */
 
 import { UserAccount, Transaction, WalletRequest, SavingsVault } from '../types';
+import { db, doc, collection, setDoc, onSnapshot, handleFirestoreError, OperationType } from '../firebase';
 
 export const DEFAULT_USERS: UserAccount[] = [
   {
@@ -41,7 +42,7 @@ export const DEFAULT_USERS: UserAccount[] = [
     fullName: 'Coocnut Friend',
     birthday: '2000-11-20',
     email: 'coocnut1344@gmail.com',
-    emailVerified: false, // Intentional: tests forced email verification!
+    emailVerified: false,
     stk: '1002003002',
     role: 'user',
     balance: 200000,
@@ -100,6 +101,14 @@ export function getStoredUsers(): UserAccount[] {
 export function saveStoredUsers(users: UserAccount[]): void {
   try {
     localStorage.setItem('mikrapay_users', JSON.stringify(users));
+    // Asynchronously replicate to Firestore
+    users.forEach(async u => {
+      try {
+        await setDoc(doc(db, 'users', u.stk), u, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `users/${u.stk}`);
+      }
+    });
   } catch (e) {
     console.error('Error saving users:', e);
   }
@@ -140,6 +149,13 @@ export function getStoredTransactions(): Transaction[] {
 export function saveStoredTransactions(transactions: Transaction[]): void {
   try {
     localStorage.setItem('mikrapay_transactions', JSON.stringify(transactions));
+    // Replicate newest transaction to Firestore
+    if (transactions.length > 0) {
+      const latest = transactions[0];
+      setDoc(doc(db, 'transactions', latest.id), latest, { merge: true }).catch((err: unknown) => {
+        handleFirestoreError(err, OperationType.WRITE, `transactions/${latest.id}`);
+      });
+    }
   } catch (e) {
     console.error('Error saving transactions:', e);
   }
@@ -158,6 +174,12 @@ export function getStoredRequests(): WalletRequest[] {
 export function saveStoredRequests(requests: WalletRequest[]): void {
   try {
     localStorage.setItem('mikrapay_requests', JSON.stringify(requests));
+    if (requests.length > 0) {
+      const latest = requests[0];
+      setDoc(doc(db, 'requests', latest.id), latest, { merge: true }).catch((err: unknown) => {
+        handleFirestoreError(err, OperationType.WRITE, `requests/${latest.id}`);
+      });
+    }
   } catch (e) {
     console.error('Error saving requests:', e);
   }
@@ -176,6 +198,11 @@ export function getStoredSavings(): SavingsVault[] {
 export function saveStoredSavings(savings: SavingsVault[]): void {
   try {
     localStorage.setItem('mikrapay_savings', JSON.stringify(savings));
+    savings.forEach(s => {
+      setDoc(doc(db, 'savings', s.id), s, { merge: true }).catch((err: unknown) => {
+        handleFirestoreError(err, OperationType.WRITE, `savings/${s.id}`);
+      });
+    });
   } catch (e) {
     console.error('Error saving savings:', e);
   }
