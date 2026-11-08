@@ -55,6 +55,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [quickCodeInput, setQuickCodeInput] = useState('');
   const [quickCodeLoading, setQuickCodeLoading] = useState(false);
   const [showAuthQrScanner, setShowAuthQrScanner] = useState(false);
+  const [pending2FaUser, setPending2FaUser] = useState<UserAccount | null>(null);
+  const [pending2FaOtp, setPending2FaOtp] = useState<{ code: string; expiresAt: number } | null>(null);
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
