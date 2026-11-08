@@ -9,6 +9,7 @@ import {
   AlertCircle, Smartphone, Check, RefreshCw, Trash2, ShieldCheck, Lock
 } from 'lucide-react';
 import { UserAccount } from '../types';
+import { QuickLoginApprovalModal } from './QuickLoginApprovalModal';
 import { createPasskey, verifyPasskey, isWebAuthnSupported } from '../utils/webauthn';
 import {
   validateEmailChange,
@@ -45,6 +46,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [quickLoginCode, setQuickLoginCode] = useState<string | null>(null);
   const [quickLoginQrUrl, setQuickLoginQrUrl] = useState<string | null>(null);
   const [quickLoginLoading, setQuickLoginLoading] = useState(false);
+  const [showQuickLoginApproval, setShowQuickLoginApproval] = useState(false);
 
   const handleGenerateQuickLogin = async () => {
     setQuickLoginLoading(true);
@@ -380,45 +382,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Smartphone className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Quick Login Approval</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Quick Login Sync</h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Enter the 6-digit code from the new device you want to log in.
+                      Authorize a new device login securely.
                     </p>
                   </div>
                 </div>
 
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (quickLoginCode && quickLoginCode.length === 6) {
-                    setQuickLoginLoading(true);
-                    const { approveQuickLoginRequest } = await import('../utils/storage');
-                    const success = await approveQuickLoginRequest(quickLoginCode, session.stk);
-                    setQuickLoginLoading(false);
-                    if (success) {
-                      triggerToast('Quick Login approved successfully!', 'success');
-                      setQuickLoginCode('');
-                    } else {
-                      triggerToast('Invalid or expired Quick Login code.', 'error');
-                    }
-                  }
-                }} className="space-y-3">
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={quickLoginCode || ''}
-                    onChange={e => setQuickLoginCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Enter 6-digit code"
-                    className="w-full px-4 py-3 rounded-xl glass-input text-center text-xl font-mono font-bold tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={quickLoginLoading || !quickLoginCode || quickLoginCode.length !== 6}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer"
-                  >
-                    {quickLoginLoading ? 'Approving...' : 'Approve Quick Login'}
-                  </button>
-                </form>
+                <button
+                  onClick={() => setShowQuickLoginApproval(true)}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Approve New Device Login</span>
+                </button>
               </div>
+
+              {showQuickLoginApproval && (
+                <QuickLoginApprovalModal
+                  onApprove={async (code) => {
+                    const { approveQuickLoginRequest } = await import('../utils/storage');
+                    return await approveQuickLoginRequest(code, session.stk);
+                  }}
+                  onClose={() => setShowQuickLoginApproval(false)}
+                  triggerToast={triggerToast}
+                />
+              )}
             </div>
           )}
 
@@ -459,42 +448,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {!session.passkeyRegistered ? (
-                <div className="space-y-3">
-                  <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-xs text-cyan-700 dark:text-cyan-300">
-                    <p className="font-semibold mb-1">Strict Passkey Security</p>
-                    <p>
-                      MikraPay uses the official FIDO2/WebAuthn standard directly in your browser.
-                      No fake fallbacks are used. Registering a passkey links your physical biometric key to your account.
+              {webAuthnSupported && (
+                <div className="flex items-center justify-between p-4 rounded-2xl glass-card border border-slate-200/50 dark:border-white/10 gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Enable Biometric Login</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Use Face ID, Touch ID, or hardware key to log in.
                     </p>
                   </div>
-
                   <button
-                    onClick={handleRegisterPasskey}
-                    disabled={passkeyLoading || !webAuthnSupported}
-                    className="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    onClick={session.passkeyRegistered ? handleRemovePasskey : handleRegisterPasskey}
+                    className={`w-12 h-6 rounded-full transition-all relative ${
+                      session.passkeyRegistered ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                    }`}
                   >
-                    <Fingerprint className="w-4 h-4" />
-                    <span>{passkeyLoading ? 'Prompting Device Authenticator...' : 'Add Passkey on this Device'}</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleTestPasskey}
-                    disabled={passkeyLoading}
-                    className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl border border-slate-300/40 dark:border-white/10 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${passkeyLoading ? 'animate-spin' : ''}`} />
-                    <span>Test Passkey Sensor</span>
-                  </button>
-
-                  <button
-                    onClick={handleRemovePasskey}
-                    className="py-2.5 px-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-xs rounded-xl border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Remove Passkey</span>
+                    <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${session.passkeyRegistered ? 'left-7' : 'left-1'}`}></div>
                   </button>
                 </div>
               )}

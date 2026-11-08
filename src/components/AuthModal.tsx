@@ -13,6 +13,7 @@ import { generateStk, generateOtp, verifyOtpCode } from '../utils/rules';
 import { verifyPasskey } from '../utils/webauthn';
 import { auth, googleProvider, signInWithPopup } from '../firebase';
 import { QrScannerModal } from './QrScannerModal';
+import { QuickLoginRequestModal } from './QuickLoginRequestModal';
 
 interface AuthModalProps {
   allUsers: UserAccount[];
@@ -55,6 +56,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [quickCodeInput, setQuickCodeInput] = useState('');
   const [quickCodeLoading, setQuickCodeLoading] = useState(false);
   const [showAuthQrScanner, setShowAuthQrScanner] = useState(false);
+  const [showQuickLoginRequest, setShowQuickLoginRequest] = useState(false);
   const [pending2FaUser, setPending2FaUser] = useState<UserAccount | null>(null);
   const [pending2FaOtp, setPending2FaOtp] = useState<{ code: string; expiresAt: number } | null>(null);
 
@@ -546,45 +548,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             {/* Quick Login Request (Initiator) */}
             <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/10 text-center">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                <Smartphone className="w-3.5 h-3.5 inline text-cyan-500" />
-                <span> Initiate Quick Login from this device:</span>
-              </p>
-              
-              {!quickCodeInput ? (
-                <button
-                  onClick={async () => {
-                    setQuickCodeLoading(true);
-                    const { initiateQuickLoginRequest } = await import('../utils/storage');
-                    const { code } = await initiateQuickLoginRequest();
-                    setQuickCodeInput(code);
-                    const { generateQrDataUrl } = await import('../utils/qr');
-                    const qrUrl = await generateQrDataUrl(`mikrapay://quicklogin?code=${code}`);
-                    setQuickCodeLoading(false);
-                    // Start listening for approval
-                    const { listenForQuickLoginApproval } = await import('../utils/storage');
-                    const unsubscribe = listenForQuickLoginApproval(code, (stk) => {
-                      unsubscribe();
-                      // Find user by stk
-                      const user = allUsers.find(u => u.stk === stk);
-                      if (user) {
-                        triggerToast(`Quick Login approved! Signing in as ${user.fullName}...`, 'success');
-                        check2FaOrLogin(user);
-                      }
-                    });
+              <button
+                onClick={() => setShowQuickLoginRequest(true)}
+                className="w-full py-3 px-4 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-300/40 dark:border-white/10 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Smartphone className="w-4 h-4 text-cyan-500" />
+                <span>Quick Login Request</span>
+              </button>
+
+              {showQuickLoginRequest && (
+                <QuickLoginRequestModal
+                  onSuccess={(stk) => {
+                    setShowQuickLoginRequest(false);
+                    const user = allUsers.find(u => u.stk === stk);
+                    if (user) {
+                      triggerToast(`Quick Login approved! Signing in as ${user.fullName}...`, 'success');
+                      check2FaOrLogin(user);
+                    }
                   }}
-                  disabled={quickCodeLoading}
-                  className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
-                >
-                  {quickCodeLoading ? 'Generating...' : 'Start Quick Login Request'}
-                </button>
-              ) : (
-                <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-center space-y-3">
-                  <div className="text-xs text-slate-600 dark:text-slate-300">Enter this code on your logged-in device:</div>
-                  <div className="text-3xl font-mono font-extrabold tracking-widest text-cyan-500">{quickCodeInput}</div>
-                  {/* QR would be here too */}
-                  <p className="text-[10px] text-slate-500">Waiting for approval...</p>
-                </div>
+                  onClose={() => setShowQuickLoginRequest(false)}
+                  triggerToast={triggerToast}
+                />
               )}
             </div>
           </div>
